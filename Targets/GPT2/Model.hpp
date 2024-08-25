@@ -135,7 +135,6 @@ public:
         {
             auto inputTokenId = static_cast<ssize_t>(inputTokenIds.value().data<float>()[i]);
             inputTensors.emplace_back(m_w[inputTokenId].unsqueeze(0));
-            inputTensors.back().value().data<float>()[0] = static_cast<float>(inputTokenId);
         }
         return aix::vstack(inputTensors);
     }
