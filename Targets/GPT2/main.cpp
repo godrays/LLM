@@ -34,6 +34,7 @@ struct CmdLineOptions
 {
     std::string prompt;
     ModelConfigType modelType{ModelConfigType::OPENAI_124M};
+    aix::DeviceType deviceType{aix::DeviceType::kCPU};
 };
 
 CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
@@ -43,14 +44,16 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
     GPT2 - Copyright (c) 2024-Present, Arkin Terli. All rights reserved.
 
     Usage:
-        GPT2 --prompt=<text> --model=<type>
+        GPT2 --prompt=<text> --model=<type> --device=<type>
 
     Example:
-        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M
+        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --device=MCS
 
     Options:
         --prompt=<text>     Your prompt to the GPT2.
         --model=<type>      Model type to use. Options: [124M | 355M | 774M | 1558M]
+        --device=<type>     Device type to use. Options: [CPU | MCS]
+                            MCS: Metal Compute Shaders for Apple Silicon.
     )";
 
     std::map <std::string, docopt::value>  args;
@@ -64,8 +67,9 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         // Parse cmd-line parameters.
         args = docopt::docopt(USAGE, {argv + 1, argv + argc}, false, "GPT2 0.0.0");
 
-        options.prompt = args["--prompt"].asString();
-        auto modelType = args["--model"].asString();
+        options.prompt  = args["--prompt"].asString();
+        auto modelType  = args["--model"].asString();
+        auto deviceType = args["--device"].asString();
 
         if (options.prompt.empty()) throw std::invalid_argument("Prompt cannot be empty.");
 
@@ -73,8 +77,11 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         else if (modelType == "355M")   options.modelType = ModelConfigType::OPENAI_355M;
         else if (modelType == "774M")   options.modelType = ModelConfigType::OPENAI_774M;
         else if (modelType == "1558M")  options.modelType = ModelConfigType::OPENAI_1558M;
-        else
-            throw std::invalid_argument("Unknown model parameter type: " + modelType);
+        else throw std::invalid_argument("Unknown model type: " + modelType);
+
+        if (deviceType == "CPU")        options.deviceType = aix::DeviceType::kCPU;
+        else if (deviceType == "MCS")   options.deviceType = aix::DeviceType::kGPU_METAL;
+        else throw std::invalid_argument("Unknown device type: " + deviceType);
     }
     catch (std::exception& e)
     {
@@ -112,7 +119,6 @@ int main(int argc, const char* argv[])
         { {"nVocab", 50257}, {"nCtx", 1024}, {"nEmbd", 1024}, {"nHeads", 16}, {"nLayers", 24}, },   // 355M
         { {"nVocab", 50257}, {"nCtx", 1024}, {"nEmbd", 1280}, {"nHeads", 20}, {"nLayers", 36}, },   // 774M
         { {"nVocab", 50257}, {"nCtx", 1024}, {"nEmbd", 1600}, {"nHeads", 25}, {"nLayers", 48}, },   // 1558M
-
     };
 
     std::vector<std::string> modelWeightsFilenames =
@@ -132,7 +138,7 @@ int main(int argc, const char* argv[])
     auto modelFile    = modelWeightsFilenames[modelType];
     auto bpeMergeFile = "Resources/GPT2/oaiBPEMergeRules.txt";
     auto bpeVocabFile = "Resources/GPT2/oaiBPEVocabs.txt";
-    auto deviceType   = aix::DeviceType::kGPU_METAL;
+    auto deviceType   = cmdLineOptions.deviceType;
 
     std::string prompt = cmdLineOptions.prompt;
 
@@ -152,7 +158,7 @@ int main(int argc, const char* argv[])
     auto device = aix::createDevice(deviceType);
     if (!device)
     {
-        std::cerr << "Currently only Apple Silicon hardware acceleration is supported." << std::endl;
+        std::cerr << "Device type is not supported." << std::endl;
         exit(-1);
     }
 
