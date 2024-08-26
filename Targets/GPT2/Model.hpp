@@ -212,9 +212,9 @@ public:
         auto qkv = x.split(m_embdDim, -1);     // {seq, 3*embd} --> {3, seq, embd}
 
         // Split each in qkv into n heads/chucks.
-        std::vector<aix::Tensor> qHeads = qkv[0].split(m_embdDim / m_numHeads, -1);     // Q --> n heads.
-        std::vector<aix::Tensor> kHeads = qkv[1].split(m_embdDim / m_numHeads, -1);     // K --> n heads.
-        std::vector<aix::Tensor> vHeads = qkv[2].split(m_embdDim / m_numHeads, -1);     // V --> n heads.
+        auto qHeads = qkv[0].split(m_embdDim / m_numHeads, -1);     // Q --> n heads.
+        auto kHeads = qkv[1].split(m_embdDim / m_numHeads, -1);     // K --> n heads.
+        auto vHeads = qkv[2].split(m_embdDim / m_numHeads, -1);     // V --> n heads.
 
         // [3, heads, seq, embd/heads] --> [heads, seq, embd/heads]
         std::vector<aix::Tensor> outHeads;
