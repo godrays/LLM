@@ -21,7 +21,7 @@ Externals/*
 !Externals/*.sh
 
 # Resources
-Resources/*.bin
+Resources/GPT2/*.bin
 
 #CLion
 .idea
