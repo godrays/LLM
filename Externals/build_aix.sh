@@ -11,7 +11,7 @@
 
 lib_name=aix
 lib_version=main
-lib_url=git@github.com:godrays/aix.git
+lib_url=https://github.com/godrays/AIX.git
 logical_core_count=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)
 
 pushd .
