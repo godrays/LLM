@@ -186,7 +186,7 @@ int main(int argc, const char* argv[])
 
         // Convert the token IDs into a tensor.
         auto inputs = aix::Tensor(inputTokenIds.data(), inputTokenIds.size(), aix::DataType::kInt64,
-                                  aix::Shape{inputTokenIds.size()}).to(device);
+                                  aix::Shape{inputTokenIds.size()}, aix::dtype(aix::DataType::kInt32)).to(device);
 
         // Predict the next token (either a word or a sub-word).
         auto logits = model.forward(inputs);

@@ -127,16 +127,7 @@ public:
 
     aix::Tensor forward(aix::Tensor inputTokenIds) const override
     {
-        inputTokenIds.device()->commitAndWait();
-        std::vector<aix::Tensor> inputTensors;
-        // Select all embeddings with the given token IDs and stack them vertically.
-        // TODO: Selection and stacking need to be optimized to be done in a single operation.
-        for (size_t i=0; i<inputTokenIds.shape()[0]; ++i)
-        {
-            auto inputTokenId = static_cast<ssize_t>(inputTokenIds.value().data<float>()[i]);
-            inputTensors.emplace_back(m_w[inputTokenId].unsqueeze(0));
-        }
-        return aix::vstack(inputTensors);
+        return m_w.indexSelect(0, inputTokenIds);
     }
 
     aix::Tensor matmulWithTranspose(const aix::Tensor& x) const
@@ -310,7 +301,7 @@ public:
     aix::Tensor forward(aix::Tensor inputs) const override
     {
         // Text and positional embeddings.
-        auto range = aix::arange(0, inputs.shape()[0], 1, aix::device(inputs.device()));
+        auto range = aix::arange(0, inputs.shape()[0], 1, aix::dtype(aix::DataType::kInt32).device(inputs.device()));
         auto x = m_wte.forward(inputs) + m_wpe.forward(range);
 
         // Transformer decoder stack.
