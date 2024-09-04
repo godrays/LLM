@@ -16,8 +16,8 @@ logical_core_count=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)
 
 pushd .
 
+rm -rf $lib_name/$lib_version
 git clone --recurse-submodules -b $lib_version $lib_url ./$lib_name/$lib_version
-mkdir -p $lib_name/$lib_version
 cd $lib_name/$lib_version
 
 cd Externals
