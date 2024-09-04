@@ -15,40 +15,6 @@
 // System includes
 
 
-class GeLU : public aix::nn::Module
-{
-public:
-    // Constructor.
-    GeLU() = default;
-
-    aix::Tensor forward(aix::Tensor x) const override
-    {
-        return 0.5 * x * (1.0 + aix::tanh(std::sqrtf(2.0 / std::numbers::pi) * (x + 0.044715 * x.pow(3))));
-    }
-};
-
-
-class Softmax : public aix::nn::Module
-{
-public:
-    // Constructor.
-    Softmax() = default;
-
-    // Constructor.
-    explicit Softmax(ssize_t dim=0, bool keepDim=false) : m_dim{dim}, m_keepDim{keepDim} { }
-
-    aix::Tensor forward(aix::Tensor x) const override
-    {
-        x = (x - x.max(m_dim, m_keepDim)).exp();
-        return x / x.sum(m_dim, m_keepDim);
-    }
-
-private:
-    ssize_t m_dim{0};
-    bool m_keepDim{false};
-};
-
-
 class Linear : public aix::nn::Module
 {
 public:
@@ -159,9 +125,9 @@ public:
     aix::Tensor forward(aix::Tensor x) const override
     {
         // Project up.
-        auto a = GeLU().forward(m_fc.forward(x));       // {seq, embd} --> {seq, 4*embd}
+        auto a = aix::nn::GeLU().forward(m_fc.forward(x));      // {seq, embd} --> {seq, 4*embd}
         // Project back down.
-        return m_cProj.forward(a);                      // {seq, 4*embd} --> {seq, embd}
+        return m_cProj.forward(a);                              // {seq, 4*embd} --> {seq, embd}
     }
 
 private:
@@ -225,7 +191,8 @@ private:
     static aix::Tensor attention(const aix::Tensor& q, const aix::Tensor& k, const aix::Tensor& v,
                                  const aix::Tensor& mask)
     {
-        return Softmax(-1, true).forward(q.matmul(k.transpose(0, 1)) / std::sqrt(q.shape().back()) + mask).matmul(v);
+        auto softmax = aix::nn::Softmax(-1, true);
+        return softmax.forward(q.matmul(k.transpose(0, 1)) / std::sqrt(q.shape().back()) + mask).matmul(v);
     }
 
     size_t  m_embdDim{0};
