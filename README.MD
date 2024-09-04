@@ -25,6 +25,10 @@ $ ./GPT2 --prompt="What do you know about artificial intelligence?" --model=124M
 
 NOTE: If you have an Apple Silicon hardware, use --device=MCS for GPU acceleration.
 
+Here is the output:
+
+<a href="https://s11.gifyu.com/images/S1wfD.gif"><img src="https://s11.gifyu.com/images/S1wfD.gif" alt="Untitled" border="0" /></a>
+
 # Project Build Instructions
 
 Follow the following steps to build the project and make it deployment ready.
