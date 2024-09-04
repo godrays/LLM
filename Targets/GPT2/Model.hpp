@@ -197,7 +197,7 @@ public:
         x = m_cAtt.forward(x);                  // {seq, embd} --> {seq, 3*embd}
 
         // Causal mask to hide future inputs from being attended to. ( mask{seq, seq} )
-        auto causalMask = (1 - aix::ones({x.shape()[0], x.shape()[0]}, aix::device(x.device())).tril()) * -1e10;
+        auto causalMask = aix::ones({x.shape()[0], x.shape()[0]}, aix::device(x.device())).triu(1) * -1e10;
 
         // Split into {Q, K, V}
         auto qkv = x.split(m_embdDim, -1);     // {seq, 3*embd} --> {3, seq, embd}
