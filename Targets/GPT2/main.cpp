@@ -193,7 +193,7 @@ int main(int argc, const char* argv[])
         auto nextTokenTensor = aix::argmax(logits[-1]);     // Greedy sampling. Selecting the highest prob token.
 
         // Synchronize to read data on the CPU.
-        device->commitAndWait();
+        device->synchronize();
 
         // Decode the new token ID and print it.
         auto nextTokenId = nextTokenTensor.value().item<int32_t>();     // Argmax return type is always int32_t.
