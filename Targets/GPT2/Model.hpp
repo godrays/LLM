@@ -96,9 +96,9 @@ public:
         return m_w.indexSelect(0, inputTokenIds);
     }
 
-    aix::Tensor matmulWithTranspose(const aix::Tensor& x) const
+    aix::Tensor transpose() const
     {
-        return x.matmul(m_w.transpose(0, 1));
+        return m_w.transpose(0, 1);
     }
 
 private:
@@ -280,7 +280,7 @@ public:
         // Projection to vocabulary. The final layer normalization is specific to the GPT2 architecture.
         // It is not present in the original GPT and Transformer papers.
         // NOTE: Softmax is not applied at the end, so the outputs will be logits instead of probabilities.
-        return m_wte.matmulWithTranspose(m_layerNorm.forward(x));
+        return m_layerNorm.forward(x).matmul(m_wte.transpose());
     }
 
 private:
