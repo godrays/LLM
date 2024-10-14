@@ -27,7 +27,7 @@ NOTE: If you have an Apple Silicon hardware, use --device=MCS for GPU accelerati
 
 Here is the output:
 
-<a href="https://s11.gifyu.com/images/S1wfD.gif"><img src="https://s11.gifyu.com/images/S1wfD.gif" alt="Untitled" border="0" /></a>
+<a href="https://s11.gifyu.com/images/SBaAa.gif"><img src="https://s11.gifyu.com/images/SBaAa.gif" alt="Untitled" border="0" /></a>
 
 # Project Build Instructions
 
