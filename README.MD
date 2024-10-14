@@ -1,6 +1,6 @@
 # LLM (C++)
 
-LLM C++ project implements various LLM models in C++ using the AIX machine learning framework.
+LLM C++ project implements various LLM models in C++ using the <a href="https://github.com/godrays/AIX">AIX</a> machine learning framework.
 
 ### Overview
 
