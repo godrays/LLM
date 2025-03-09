@@ -13,14 +13,11 @@ Assuming you have already built the project explained in the following section, 
 ```bash
 # Download OpenAI GPT2 model weights only once. Options: 124M, 355M, 774M and 1558M
 
+$ cd product-rel
 $ cd Resources
 $ python downloadGPT2.py 124M
 $ cd ..
-
-# Give it a try, assuming the binary folder name is product-rel.
-
-$ cd product-rel
-$ ./GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --device=CPU
+$ GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --device=CPU
 ```
 
 NOTE: If you have an Apple Silicon hardware, use --device=MCS for GPU acceleration.
@@ -37,27 +34,15 @@ Currently, it has been built and tested on macOS Sonoma with no issues.
 
 ---
 
-### Step 1: Build Externals
-
-This step will build external libraries.
-
-```bash
-cd Externals
-./build_aix.sh
-./build_docopt.sh
-```
-
-### Step 2: Build Targets
-
 This step will build all binaries and deploy into a specific folder. Assuming you are in the root folder of the project.
 
 ```bash
-./build.sh release product-rel
+$ python build.py build release build-rel product-rel
 ```
 
 After the successful build, all target binaries will be deployed into the product-rel folder.
 
-Note: Run the build.sh file without parameters to see all options.
+Note: Run the build.py file without parameters to see all options.
 
 # Citation
 
