@@ -11,7 +11,7 @@ set(TARGET_NAME GPT2)
 set(RESOURCES_DIR Resources/GPT2)
 
 add_executable(${TARGET_NAME}
-        main.cpp
+        Main.cpp
 )
 
 # Record files names in RESOURCES_DIR.
