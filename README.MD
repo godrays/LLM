@@ -42,6 +42,12 @@ $ python build.py build release build-rel product-rel
 
 After the successful build, all target binaries will be deployed into the product-rel folder.
 
+You may need to build the project with a specific compiler and make program options.
+
+```bash
+$ python build.py build release build-rel product-rel -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_MAKE_PROGRAM=ninja -G Ninja
+```
+
 Note: Run the build.py file without parameters to see all options.
 
 # Citation
