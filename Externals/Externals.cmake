@@ -39,7 +39,7 @@ function(add_external_git_project lib_name git_repository git_tag cmake_project_
             LOG_TEST ON
             LOG_MERGED_STDOUTERR ON
             LOG_OUTPUT_ON_FAILURE ON
-            BUILD_ALWAYS YES
+            BUILD_ALWAYS ON
     )
     set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${external_bin_dir}/${lib_name}")
     include_directories(${external_bin_dir}/${lib_name}/install/include)
@@ -59,8 +59,8 @@ set(EXTERNAL_COMMON_CMAKE_ARGS
         -DCMAKE_CXX_FLAGS_DEBUG=${CMAKE_CXX_FLAGS_DEBUG}
         -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
         -DCMAKE_POSITION_INDEPENDENT_CODE=${CMAKE_POSITION_INDEPENDENT_CODE}
+        -DCMAKE_BUILD_WITH_INSTALL_RPATH=${CMAKE_BUILD_WITH_INSTALL_RPATH}
         -DCMAKE_INSTALL_RPATH=${CMAKE_INSTALL_RPATH}
-        -DCMAKE_INSTALL_MESSAGE=NEVER
 )
 
 # Externals build and install folder.
