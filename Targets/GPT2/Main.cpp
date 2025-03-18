@@ -48,7 +48,7 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         GPT2 --prompt=<text> --model=<type> --model-path=<path> --device=<type>
 
     Example:
-        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --device=MCS
+        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --device=MCS
 
     Options:
         --prompt=<text>     Your prompt to the GPT2.
