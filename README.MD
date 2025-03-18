@@ -15,7 +15,7 @@ Assuming you have already built the project explained in the following section, 
 
 $ cd product-rel
 $ cd Resources
-$ python downloadGPT2.py 124M
+$ python downloadGPT2.py init 124M
 $ cd ..
 $ GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources\GPT2 --device=CPU
 ```
