@@ -10,6 +10,7 @@
 import os
 import subprocess
 import sys
+import platform
 import shutil
 
 
@@ -103,54 +104,21 @@ def downloadAndSaveWeights(modelSize, modelsDir, targetFilepath):
         saveWeights(params, file)
 
 
-def createVirtualEnv(venv_name):
-    subprocess.check_call([sys.executable, "-m", "venv", venv_name])
+# ----------------------------------------------------------------------------
+# HELPER VIRTUAL ENVIRONMENT AND MAIN FUNCTIONS
+# ----------------------------------------------------------------------------
 
 
-def installPackages(pipBin, packages):
-    subprocess.check_call([pipBin, "install"] + packages)
-
-
-def getVirtualEnvPaths(venvName):
-    if os.name == 'nt':     # windows
-        pipBin = os.path.join(venvName, "Scripts", "pip")
-    else:                   # macOS, unix, linux
-        pipBin = os.path.join(venvName, "bin", "pip")
-    return pipBin
-
-
-def main():
-    if (sys.version_info.major != 3 or sys.version_info.minor != 11):
-        print("This script requires python version 3.11.x")
-        exit()
-
-    if len(sys.argv) != 2:
-        print("Please provide a model size to download as an argument. Options: 124M, 355M, 774M, 1558M")
-        print("Example:")
-        print("         python " + sys.argv[0] + " 124M")
-        exit()
-
+def virtualMain(tempDir, modelDir, modelSize):
     # Install the required Python packages into a temporary virtual environment to avoid polluting the system.
-    packages = ["numpy", "regex", "requests", "tqdm", "urllib3", "tensorflow"]
-    venvDir = "temp_venv"
-    tempDir = "./tempdir"
-    modelDir = "./GPT2"
-    modelSizes = ["124M", "355M", "774M", "1558M"]
     modelFilename = "oaiWeights"
     modelFileExt = ".bin"
-    modelSize =  sys.argv[1]
-
-    assert modelSize in modelSizes
-
-    createVirtualEnv(venvDir)
-    pipBin = getVirtualEnvPaths(venvDir)
 
     try:
         # Remove previous temporary dir.
         if os.path.exists(tempDir):
             shutil.rmtree(tempDir)
         # Install python packages.
-        installPackages(pipBin, packages)
         sourceFilepath = os.path.join(tempDir, modelSize, modelFilename + modelFileExt)
         targetFilepath = os.path.join(modelDir, modelFilename + modelSize + modelFileExt)
         os.makedirs(os.path.dirname(sourceFilepath), exist_ok=True)
@@ -159,9 +127,60 @@ def main():
         downloadAndSaveWeights(modelSize, tempDir, targetFilepath)
     finally:
         # Cleanup.
-        shutil.rmtree(venvDir)
         shutil.rmtree(tempDir)
 
 
+def initVirtualEnvironment(venvName, venvPackages):
+    # Determine os specific commands.
+    if platform.system() == "Windows":
+        activate_cmd = f"{venvName}\\Scripts\\activate"
+        separator = " & "   # Use & to chain on Windows
+        removeVenv = f"rmdir {venvName} /s /q"
+    else:
+        activate_cmd = f"source {venvName}/bin/activate"
+        separator = " && "  # Use && to chain on POSIX
+        removeVenv = f"rm -rf {venvName}"
+
+    # Construct the full command string.
+    fullCommand = (
+        f"python -c \"import sys; print('Running Python: ', sys.version)\"{separator}"
+        f"python -m venv {venvName}{separator}"
+        f"{activate_cmd}{separator}"
+        f"pip install --upgrade pip{separator}"
+        f"pip install {' '.join(venvPackages)}{separator}"
+        f"python {sys.argv[0]} run {sys.argv[2]}{separator}"
+        f"{removeVenv}"
+    )
+
+    # Run the commands in a single shell process.
+    subprocess.run(fullCommand, check=True, shell=True, capture_output=False)
+
+
 if __name__ == "__main__":
-    main()
+    if sys.version_info.major != 3 or sys.version_info.minor != 11:
+        print("Please use python version 3.11.x. (Use pyenv to install)")
+        exit()
+
+    if (len(sys.argv) != 3
+            or (not sys.argv[1] in ["init", "run"])
+            or (not sys.argv[2] in ["124M", "355M", "774M", "1558M"])):
+        print("Please provide a model size to download as an argument. Options: 124M, 355M, 774M, 1558M")
+        print("Example:")
+        print("         python " + sys.argv[0] + " init 124M")
+        exit()
+
+    mode = sys.argv[1]
+    modelType = sys.argv[2]
+
+    # Packages that will be installed in the virtual environment.
+    venvPackages = ["numpy==2.1.3",
+                    "regex==2024.11.6",
+                    "requests==2.32.3",
+                    "tqdm==4.67.1",
+                    "urllib3==2.3.0",
+                    "tensorflow==2.19.0"]
+
+    if mode == "init":      # The script will initiate virtual environment.
+        initVirtualEnvironment(venvName="temp_venv", venvPackages=venvPackages)
+    elif mode == "run":       # The script will call itself inside venv with run parameter.
+        virtualMain(tempDir="temp_dir", modelDir="GPT2", modelSize=modelType)
