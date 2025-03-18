@@ -36,7 +36,7 @@ set(CMAKE_CXX_FLAGS_ASAN "${CMAKE_CXX_FLAGS} -g -O1 -fsanitize=address -fno-omit
 set(CMAKE_CXX_FLAGS_TSAN "${CMAKE_CXX_FLAGS} -g -O2 -fsanitize=thread -fPIE")
 
 # Set external library versions.
-set(EXTERNAL_AIX_VERSION b5621b4)
+set(EXTERNAL_AIX_VERSION 329dac2)
 set(EXTERNAL_DOCOPT_VERSION 400e6dd)
 
 # Build external libraries.
