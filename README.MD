@@ -17,7 +17,7 @@ $ cd product-rel
 $ cd Resources
 $ python downloadGPT2.py 124M
 $ cd ..
-$ GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --device=CPU
+$ GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources\GPT2 --device=CPU
 ```
 
 NOTE: If you have an Apple Silicon hardware, use --device=MCS for GPU acceleration.
