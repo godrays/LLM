@@ -120,6 +120,10 @@ def getVirtualEnvPaths(venvName):
 
 
 def main():
+    if (sys.version_info.major != 3 or sys.version_info.minor != 11):
+        print("This script requires python version 3.11.x")
+        exit()
+
     if len(sys.argv) != 2:
         print("Please provide a model size to download as an argument. Options: 124M, 355M, 774M, 1558M")
         print("Example:")
