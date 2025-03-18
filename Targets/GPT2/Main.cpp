@@ -34,6 +34,7 @@ struct CmdLineOptions
 {
     std::string prompt;
     ModelConfigType modelType{ModelConfigType::OPENAI_124M};
+    std::string modelPath;
     aix::DeviceType deviceType{aix::DeviceType::kCPU};
 };
 
@@ -44,7 +45,7 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
     GPT2 - Copyright (c) 2024-Present, Arkin Terli. All rights reserved.
 
     Usage:
-        GPT2 --prompt=<text> --model=<type> --device=<type>
+        GPT2 --prompt=<text> --model=<type> --model-path=<path> --device=<type>
 
     Example:
         GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --device=MCS
@@ -52,6 +53,7 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
     Options:
         --prompt=<text>     Your prompt to the GPT2.
         --model=<type>      Model type to use. Options: [124M | 355M | 774M | 1558M]
+        --model-path=<path> Model directory path.
         --device=<type>     Device type to use. Options: [CPU | MCS]
                             MCS: Metal Compute Shaders for Apple Silicon.
     )";
@@ -69,6 +71,7 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
 
         options.prompt  = args["--prompt"].asString();
         auto modelType  = args["--model"].asString();
+        auto modelPath  = args["--model-path"].asString();
         auto deviceType = args["--device"].asString();
 
         if (options.prompt.empty()) throw std::invalid_argument("Prompt cannot be empty.");
@@ -78,6 +81,9 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         else if (modelType == "774M")   options.modelType = ModelConfigType::OPENAI_774M;
         else if (modelType == "1558M")  options.modelType = ModelConfigType::OPENAI_1558M;
         else throw std::invalid_argument("Unknown model type: " + modelType);
+
+        if (!modelPath.empty()) options.modelPath = modelPath;
+        else throw std::invalid_argument("Invalid model path: " + modelPath);
 
         if (deviceType == "CPU")        options.deviceType = aix::DeviceType::kCPU;
         else if (deviceType == "MCS")   options.deviceType = aix::DeviceType::kGPU_METAL;
@@ -104,6 +110,9 @@ void validateFileExistence(const std::string& filePath)
 
 int main(int argc, const char* argv[])
 {
+    // Get command-line options.
+    auto cmdLineOptions = processCommandLineArguments(argc, argv);
+
     // NOTE: All the configuration is prepared here instead of using a separate config file to reduce noise
     //       only for the example purpose.
 
@@ -123,21 +132,18 @@ int main(int argc, const char* argv[])
 
     std::vector<std::string> modelWeightsFilenames =
     {
-        "Resources/GPT2/oaiWeights124M.bin",   // 124M parameters.
-        "Resources/GPT2/oaiWeights355M.bin",   // 355M parameters.
-        "Resources/GPT2/oaiWeights774M.bin",   // 774M parameters.
-        "Resources/GPT2/oaiWeights1558M.bin",  // 1558M parameters.
+        "oaiWeights124M.bin",   // 124M parameters.
+        "oaiWeights355M.bin",   // 355M parameters.
+        "oaiWeights774M.bin",   // 774M parameters.
+        "oaiWeights1558M.bin",  // 1558M parameters.
     };
-
-    // Get command-line options.
-    auto cmdLineOptions = processCommandLineArguments(argc, argv);
 
     // Configurations.
     auto modelType    = static_cast<size_t>(cmdLineOptions.modelType);
     auto hParams      = modelParams[modelType];
-    auto modelFile    = modelWeightsFilenames[modelType];
-    auto bpeMergeFile = "Resources/GPT2/oaiBPEMergeRules.txt";
-    auto bpeVocabFile = "Resources/GPT2/oaiBPEVocabs.txt";
+    auto modelFile    = cmdLineOptions.modelPath + "/" + modelWeightsFilenames[modelType];
+    auto bpeMergeFile = cmdLineOptions.modelPath + "/oaiBPEMergeRules.txt";
+    auto bpeVocabFile = cmdLineOptions.modelPath + "/oaiBPEVocabs.txt";
     auto deviceType   = cmdLineOptions.deviceType;
 
     std::string prompt = cmdLineOptions.prompt;
