@@ -144,7 +144,8 @@ def initVirtualEnvironment(venvName, venvPackages):
     # Construct the full command string.
     fullCommand = (
         f"python -c \"import sys; print('Running Python: ', sys.version)\"{separator}"
-        f"python -m venv {venvName}{separator}"
+        f"pip install uv{separator}"
+        f"uv venv --python 3.11.9 --seed {venvName}{separator}"
         f"{activate_cmd}{separator}"
         f"pip install --upgrade pip{separator}"
         f"pip install {' '.join(venvPackages)}{separator}"
@@ -157,10 +158,6 @@ def initVirtualEnvironment(venvName, venvPackages):
 
 
 if __name__ == "__main__":
-    if sys.version_info.major != 3 or sys.version_info.minor != 11:
-        print("Please use python version 3.11.x. (Use pyenv to install)")
-        exit()
-
     if (len(sys.argv) != 3
             or (not sys.argv[1] in ["init", "run"])
             or (not sys.argv[2] in ["124M", "355M", "774M", "1558M"])):
