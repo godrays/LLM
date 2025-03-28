@@ -30,7 +30,7 @@ Here is the output:
 
 Follow the following steps to build the project and make it deployment ready.
 
-Currently, it has been built and tested on macOS Sonoma with no issues.
+Currently, it has been built and tested on macOS Sonoma and Windows 10 with no issues.
 
 ---
 
