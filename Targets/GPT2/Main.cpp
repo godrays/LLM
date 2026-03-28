@@ -172,7 +172,7 @@ int main(int argc, const char* argv[])
     auto model = GPT2(hParams["nVocab"], hParams["nCtx"], hParams["nEmbd"], hParams["nHeads"], hParams["nLayers"]);
 
     // Load the GPT2 model weights published by OpenAI.
-    aix::load(model, modelFile);
+    aix::nn::load(model, modelFile);
 
     model.to(device);
 
