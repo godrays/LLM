@@ -176,6 +176,12 @@ int main(int argc, const char* argv[])
 
     model.to(device);
 
+    // Inference does not require gradient.
+    for (auto & [name, param] : model.parameters())
+    {
+        param = param.requireGrad(false);
+    }
+
     std::cout << "Prompt: " << prompt << std::endl;
 
     // Create the initial token ids for the prompt.
