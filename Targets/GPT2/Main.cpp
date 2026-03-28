@@ -36,6 +36,7 @@ struct CmdLineOptions
     ModelConfigType modelType{ModelConfigType::OPENAI_124M};
     std::string modelPath;
     aix::DeviceType deviceType{aix::DeviceType::kCPU};
+    size_t maxOutputToken{1024};
 };
 
 CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
@@ -45,17 +46,18 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
     GPT2 - Copyright (c) 2024-Present, Arkin Terli. All rights reserved.
 
     Usage:
-        GPT2 --prompt=<text> --model=<type> --model-path=<path> --device=<type>
+        GPT2 --prompt=<text> --model=<type> --model-path=<path> --device=<type> [--max-output-token=<count>]
 
     Example:
-        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --device=MCS
+        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --device=MCS --max-output-token=42
 
     Options:
-        --prompt=<text>     Your prompt to the GPT2.
-        --model=<type>      Model type to use. Options: [124M | 355M | 774M | 1558M]
-        --model-path=<path> Model directory path.
-        --device=<type>     Device type to use. Options: [CPU | MCS]
-                            MCS: Metal Compute Shaders for Apple Silicon.
+        --prompt=<text>            Your prompt to the GPT2.
+        --model=<type>             Model type to use. Options: [124M | 355M | 774M | 1558M]
+        --model-path=<path>        Model directory path.
+        --device=<type>            Device type to use. Options: [CPU | MCS]
+                                   MCS: Metal Compute Shaders for Apple Silicon.
+        --max-output-token=<count> Maximum number of tokens to generate. [default: 1024]
     )";
 
     std::map <std::string, docopt::value>  args;
@@ -67,12 +69,13 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         std::vector<std::string>  baseArgs{ argv + 1, argv + argc };
 
         // Parse cmd-line parameters.
-        args = docopt::docopt(USAGE, {argv + 1, argv + argc}, false, "GPT2 0.0.0");
+        args = docopt::docopt(USAGE, {argv + 1, argv + argc}, false, "GPT2 0.1.0");
 
         options.prompt  = args["--prompt"].asString();
         auto modelType  = args["--model"].asString();
         auto modelPath  = args["--model-path"].asString();
         auto deviceType = args["--device"].asString();
+        options.maxOutputToken = args["--max-output-token"].asLong();
 
         if (options.prompt.empty()) throw std::invalid_argument("Prompt cannot be empty.");
 
@@ -145,6 +148,7 @@ int main(int argc, const char* argv[])
     auto bpeMergeFile = cmdLineOptions.modelPath + "/oaiBPEMergeRules.txt";
     auto bpeVocabFile = cmdLineOptions.modelPath + "/oaiBPEVocabs.txt";
     auto deviceType   = cmdLineOptions.deviceType;
+    auto maxOutputToken = std::min(hParams["nCtx"], cmdLineOptions.maxOutputToken);
 
     std::string prompt = cmdLineOptions.prompt;
 
@@ -194,7 +198,7 @@ int main(int argc, const char* argv[])
         // The GPT-2 model was not trained with start-of-sentence (SOS) or end-of-sentence (EOS) tokens.
         // Therefore, we can't determine when to stop generating the next token. Thus, we generate a specific number
         // of tokens, ensuring it does not exceed the context length.
-        if (inputTokenIds.size() >= hParams["nCtx"]) break;
+        if (inputTokenIds.size() >= maxOutputToken) break;
 
         // Convert the token IDs into a tensor.
         auto inputs = aix::Tensor(inputTokenIds.data(), inputTokenIds.size(), aix::DataType::kInt64,
