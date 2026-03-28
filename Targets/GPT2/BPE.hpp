@@ -26,6 +26,9 @@ typedef SSIZE_T ssize_t;
 #endif
 
 
+namespace gpt2
+{
+
 class BPE
 {
 public:
@@ -392,3 +395,5 @@ private:
     std::unordered_map<std::string, ssize_t>  m_t2i;
     std::unordered_map<ssize_t, std::string>  m_i2t;
 };
+
+}   // namespace gpt2

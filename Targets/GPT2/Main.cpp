@@ -8,8 +8,9 @@
 //  material is strictly forbidden unless prior written permission is obtained from Arkin Terli.
 
 // Project includes
-#include "BPE.hpp"
-#include "Model.hpp"
+#include "Runner.hpp"
+#include "RunnerNaive.hpp"
+#include "RunnerKVCache.hpp"
 // External includes
 #include <aix.hpp>
 #include <aixDevices.hpp>
@@ -19,8 +20,11 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <memory>
 #include <unordered_map>
 
+
+using namespace gpt2;
 
 enum class ModelConfigType : size_t
 {
@@ -34,6 +38,7 @@ struct CmdLineOptions
 {
     std::string prompt;
     ModelConfigType modelType{ModelConfigType::OPENAI_124M};
+    std::string modelImpl{"kvcache"};
     std::string modelPath;
     aix::DeviceType deviceType{aix::DeviceType::kCPU};
     size_t maxOutputToken{1024};
@@ -41,12 +46,12 @@ struct CmdLineOptions
 
 CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
 {
-    static const char USAGE[] =
+    static constexpr char USAGE[] =
     R"(
     GPT2 - Copyright (c) 2024-Present, Arkin Terli. All rights reserved.
 
     Usage:
-        GPT2 --prompt=<text> --model=<type> --model-path=<path> --device=<type> [--max-output-token=<count>]
+        GPT2 --prompt=<text> --model=<type> --model-path=<path> --device=<type> [--model-impl=<impl>] [--max-output-token=<count>]
 
     Example:
         GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --device=MCS --max-output-token=42
@@ -54,25 +59,24 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
     Options:
         --prompt=<text>            Your prompt to the GPT2.
         --model=<type>             Model type to use. Options: [124M | 355M | 774M | 1558M]
+        --model-impl=<impl>        Model implementation. Options: [kvcache | naive] [default: kvcache]
         --model-path=<path>        Model directory path.
         --device=<type>            Device type to use. Options: [CPU | MCS]
                                    MCS: Metal Compute Shaders for Apple Silicon.
         --max-output-token=<count> Maximum number of tokens to generate. [default: 1024]
     )";
 
-    std::map <std::string, docopt::value>  args;
     CmdLineOptions options;
 
     try
     {
-        // Check cmd-line parameters.
         std::vector<std::string>  baseArgs{ argv + 1, argv + argc };
 
-        // Parse cmd-line parameters.
-        args = docopt::docopt(USAGE, {argv + 1, argv + argc}, false, "GPT2 0.1.0");
+        auto args = docopt::docopt(USAGE, {argv + 1, argv + argc}, false, "GPT2 0.1.0");
 
         options.prompt  = args["--prompt"].asString();
         auto modelType  = args["--model"].asString();
+        auto modelImpl  = args["--model-impl"].asString();
         auto modelPath  = args["--model-path"].asString();
         auto deviceType = args["--device"].asString();
         options.maxOutputToken = args["--max-output-token"].asLong();
@@ -84,6 +88,10 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         else if (modelType == "774M")   options.modelType = ModelConfigType::OPENAI_774M;
         else if (modelType == "1558M")  options.modelType = ModelConfigType::OPENAI_1558M;
         else throw std::invalid_argument("Unknown model type: " + modelType);
+
+        if (modelImpl == "naive")       options.modelImpl = "naive";
+        else if (modelImpl == "kvcache") options.modelImpl = "kvcache";
+        else throw std::invalid_argument("Unknown model implementation: " + modelImpl);
 
         if (!modelPath.empty()) options.modelPath = modelPath;
         else throw std::invalid_argument("Invalid model path: " + modelPath);
@@ -113,18 +121,8 @@ void validateFileExistence(const std::string& filePath)
 
 int main(int argc, const char* argv[])
 {
-    // Get command-line options.
     auto cmdLineOptions = processCommandLineArguments(argc, argv);
 
-    // NOTE: All the configuration is prepared here instead of using a separate config file to reduce noise
-    //       only for the example purpose.
-
-    // GPT2 model parameters.
-    // nVocab : Number of tokens in our vocabulary.
-    // nCtx   : Maximum possible token sequence length for the input.
-    // nEmbd  : Embedding dimension (determines the "width" of the network).
-    // nHeads : Number of attention heads (embedding dimension must be divisible by heads).
-    // nLayers: Number of layers (determines the "depth" of the network).
     std::vector<std::unordered_map<std::string, size_t>>  modelParams
     {
         { {"nVocab", 50257}, {"nCtx", 1024}, {"nEmbd",  768}, {"nHeads", 12}, {"nLayers", 12}, },   // 124M
@@ -135,89 +133,42 @@ int main(int argc, const char* argv[])
 
     std::vector<std::string> modelWeightsFilenames =
     {
-        "oaiWeights124M.bin",   // 124M parameters.
-        "oaiWeights355M.bin",   // 355M parameters.
-        "oaiWeights774M.bin",   // 774M parameters.
-        "oaiWeights1558M.bin",  // 1558M parameters.
+        "oaiWeights124M.bin",
+        "oaiWeights355M.bin",
+        "oaiWeights774M.bin",
+        "oaiWeights1558M.bin",
     };
 
-    // Configurations.
     auto modelType    = static_cast<size_t>(cmdLineOptions.modelType);
     auto hParams      = modelParams[modelType];
     auto modelFile    = cmdLineOptions.modelPath + "/" + modelWeightsFilenames[modelType];
     auto bpeMergeFile = cmdLineOptions.modelPath + "/oaiBPEMergeRules.txt";
     auto bpeVocabFile = cmdLineOptions.modelPath + "/oaiBPEVocabs.txt";
-    auto deviceType   = cmdLineOptions.deviceType;
-    auto maxOutputToken = std::min(hParams["nCtx"], cmdLineOptions.maxOutputToken);
 
-    std::string prompt = cmdLineOptions.prompt;
-
-    // Check if all the necessary files do exist.
     validateFileExistence(bpeMergeFile);
     validateFileExistence(bpeVocabFile);
     validateFileExistence(modelFile);
 
-    // -----------------------------------------------------------
-    // Create a model, and process the prompt.
-    // -----------------------------------------------------------
-
-    // Create a BPE, Byte-Pair-Encoding tokenizer.
-    BPE bpe(bpeMergeFile, bpeVocabFile);
-
-    // Create a device that uses Apple Metal for GPU computations.
-    auto device = aix::createDevice(deviceType);
-    if (!device)
+    RunnerConfig config
     {
-        std::cerr << "Device type is not supported." << std::endl;
-        exit(-1);
-    }
+        .prompt         = cmdLineOptions.prompt,
+        .modelFile      = modelFile,
+        .bpeMergeFile   = bpeMergeFile,
+        .bpeVocabFile   = bpeVocabFile,
+        .deviceType     = cmdLineOptions.deviceType,
+        .maxOutputToken = cmdLineOptions.maxOutputToken,
+        .nVocab         = hParams["nVocab"],
+        .nCtx           = hParams["nCtx"],
+        .nEmbd          = hParams["nEmbd"],
+        .nHeads         = hParams["nHeads"],
+        .nLayers        = hParams["nLayers"],
+    };
 
-    // Create a GPT2 model.
-    auto model = GPT2(hParams["nVocab"], hParams["nCtx"], hParams["nEmbd"], hParams["nHeads"], hParams["nLayers"]);
+    std::unique_ptr<Runner> runner;
+    if (cmdLineOptions.modelImpl == "naive")        runner = std::make_unique<RunnerNaive>();
+    else if (cmdLineOptions.modelImpl == "kvcache") runner = std::make_unique<RunnerKVCache>();
 
-    // Load the GPT2 model weights published by OpenAI.
-    aix::nn::load(model, modelFile);
-
-    model.to(device);
-
-    // Inference does not require gradient.
-    for (auto & [name, param] : model.parameters())
-    {
-        param = param.requireGrad(false);
-    }
-
-    std::cout << "Prompt: " << prompt << std::endl;
-
-    // Create the initial token ids for the prompt.
-    auto inputTokenIds = bpe.encode(prompt);
-
-    // Auto-regressive decoding loop: generate/predict the next token and append it to the initial tokens to predict
-    // the following token.
-    for (size_t i=0; i<hParams["nCtx"]; ++i)
-    {
-        // The GPT-2 model was not trained with start-of-sentence (SOS) or end-of-sentence (EOS) tokens.
-        // Therefore, we can't determine when to stop generating the next token. Thus, we generate a specific number
-        // of tokens, ensuring it does not exceed the context length.
-        if (inputTokenIds.size() >= maxOutputToken) break;
-
-        // Convert the token IDs into a tensor.
-        auto inputs = aix::Tensor(inputTokenIds.data(), inputTokenIds.size(), aix::DataType::kInt64,
-                                  aix::Shape{inputTokenIds.size()}, aix::dtype(aix::DataType::kInt32)).to(device);
-
-        // Predict the next token (either a word or a sub-word).
-        auto logits = model.forward(inputs);
-        auto nextTokenTensor = aix::argmax(logits[-1]);     // Greedy sampling. Selecting the highest prob token.
-
-        // Synchronize to read data on the CPU.
-        device->synchronize();
-
-        // Decode the new token ID and print it.
-        auto nextTokenId = nextTokenTensor.value().item<int32_t>();     // Argmax return type is always int32_t.
-        std::cout << bpe.decode({nextTokenId}) << std::flush;
-
-        // Append the new token ID to the current token sequence to predict the following token in the next iteration.
-        inputTokenIds.emplace_back(nextTokenId);
-    }
+    runner->run(config);
 
     return 0;
 }

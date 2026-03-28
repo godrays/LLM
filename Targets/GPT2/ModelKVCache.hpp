@@ -15,6 +15,49 @@
 // System includes
 
 
+namespace gpt2::kvcache
+{
+
+struct KVCache
+{
+    std::vector<std::pair<aix::Tensor, aix::Tensor>> layers;
+    size_t nCtx{0};
+
+    explicit KVCache(size_t numLayers) : layers(numLayers) {}
+
+    explicit KVCache(size_t numLayers, size_t nCtx_, size_t embdDim, aix::Device *device) : nCtx(nCtx_)
+    {
+        layers.reserve(numLayers);
+        for (size_t i = 0; i < numLayers; ++i)
+        {
+            layers.emplace_back(aix::zeros({nCtx_, embdDim}, aix::device(device)),
+                                aix::zeros({nCtx_, embdDim}, aix::device(device)));
+        }
+    }
+
+    void update(size_t layer, const aix::Tensor &kNew, const aix::Tensor &vNew, size_t startPos) const
+    {
+        auto seqLen = kNew.shape()[0];
+        layers[layer].first.value().sliceSet(kNew.value(), 0, static_cast<ssize_t>(startPos),
+                                             static_cast<ssize_t>(startPos + seqLen), 1, true);
+        layers[layer].second.value().sliceSet(vNew.value(), 0, static_cast<ssize_t>(startPos),
+                                              static_cast<ssize_t>(startPos + seqLen), 1, true);
+    }
+
+    aix::Tensor k(size_t layer, size_t len) const
+    {
+        return layers[layer].first.slice(0, 0, static_cast<ssize_t>(len));
+    }
+
+    aix::Tensor v(size_t layer, size_t len) const
+    {
+        return layers[layer].second.slice(0, 0, static_cast<ssize_t>(len));
+    }
+
+    size_t size() const { return layers.size(); }
+};
+
+
 class Linear : public aix::nn::Module
 {
 public:
@@ -187,12 +230,61 @@ public:
         return m_cProj.forward(x);          // {seq, embd} --> {seq, embd}
     }
 
+    aix::Tensor forward(aix::Tensor x, const KVCache &cache, size_t layerIdx, size_t startPos) const
+    {
+        auto seqLen = x.shape()[0];
+        auto isPrefill = (startPos == 0);
+        auto endPos = startPos + seqLen;
+
+        x = m_cAtt.forward(x);                              // {seq, embd} --> {seq, 3*embd}
+
+        auto qkv = x.split(m_embdDim, -1);                 // {seq, 3*embd} --> {3, seq, embd}
+        auto q    = qkv[0];
+        auto kNew = qkv[1];
+        auto vNew = qkv[2];
+
+        cache.update(layerIdx, kNew, vNew, startPos);
+
+        auto kFull = cache.k(layerIdx, endPos);
+        auto vFull = cache.v(layerIdx, endPos);
+
+        auto qHeads = q.split(m_embdDim / m_numHeads, -1);
+        auto kHeads = kFull.split(m_embdDim / m_numHeads, -1);
+        auto vHeads = vFull.split(m_embdDim / m_numHeads, -1);
+
+        std::vector<aix::Tensor> outHeads;
+        if (isPrefill)
+        {
+            auto causalMask = aix::ones({q.shape()[0], q.shape()[0]}, aix::device(q.device())).triu(1) * -1e10;
+            for (size_t i=0; i<qHeads.size(); ++i)
+            {
+                outHeads.emplace_back(attention(qHeads[i], kHeads[i], vHeads[i], causalMask));
+            }
+        }
+        else
+        {
+            for (size_t i=0; i<qHeads.size(); ++i)
+            {
+                outHeads.emplace_back(attentionDecode(qHeads[i], kHeads[i], vHeads[i]));
+            }
+        }
+
+        x = aix::hstack(outHeads);
+        return m_cProj.forward(x);                          // {seq, embd} --> {seq, embd}
+    }
+
 private:
     static aix::Tensor attention(const aix::Tensor& q, const aix::Tensor& k, const aix::Tensor& v,
                                  const aix::Tensor& mask)
     {
         auto softmax = aix::nn::Softmax(-1, true);
         return softmax.forward(q.matmul(k.transpose(0, 1)) / std::sqrt(q.shape().back()) + mask).matmul(v);
+    }
+
+    static aix::Tensor attentionDecode(const aix::Tensor& q, const aix::Tensor& k, const aix::Tensor& v)
+    {
+        auto softmax = aix::nn::Softmax(-1, true);
+        return softmax.forward(q.matmul(k.transpose(0, 1)) / std::sqrt(q.shape().back())).matmul(v);
     }
 
     size_t  m_embdDim{0};
@@ -231,6 +323,12 @@ public:
         return x + m_ffn.forward(m_ln2.forward(x));     // {seq, embd} --> {seq, embd}
     }
 
+    aix::Tensor forward(aix::Tensor x, const KVCache &cache, size_t layerIdx, size_t startPos) const
+    {
+        x = x + m_mha.forward(m_ln1.forward(x), cache, layerIdx, startPos);     // {seq, embd} --> {seq, embd}
+        return x + m_ffn.forward(m_ln2.forward(x));                             // {seq, embd} --> {seq, embd}
+    }
+
 private:
     MultiHeadAttention  m_mha;
     LayerNorm m_ln1;
@@ -247,7 +345,7 @@ public:
 
     // Constructor.
     explicit GPT2(size_t vocabSize, size_t ctxSize, size_t embdDim, size_t numHeads, size_t numLayers)
-        : m_numLayers{numLayers}
+        : m_numLayers{numLayers}, m_nCtx{ctxSize}
     {
         // The architecture uses only the decoder stack of the original transformer model.
         m_wte = Embeddings(vocabSize, embdDim);
@@ -283,10 +381,34 @@ public:
         return m_layerNorm.forward(x).matmul(m_wte.transpose());
     }
 
+    void prepare(aix::Device *device)
+    {
+        auto range = aix::arange(0, m_nCtx, 1, aix::dtype(aix::DataType::kInt32).device(device));
+        m_posEmb = m_wpe.forward(range).to(device);
+    }
+
+    aix::Tensor forward(aix::Tensor inputs, const KVCache &cache, size_t startPos) const
+    {
+        auto seqLen = inputs.shape()[0];
+        auto posEmb = m_posEmb.slice(0, static_cast<ssize_t>(startPos), static_cast<ssize_t>(startPos + seqLen));
+        auto x = m_wte.forward(inputs) + posEmb;
+
+        for (size_t i = 0; i < m_numLayers; ++i)
+        {
+            x = m_transformerBlocks[i].forward(x, cache, i, startPos);
+        }
+
+        return m_layerNorm.forward(x).matmul(m_wte.transpose());
+    }
+
 private:
     size_t      m_numLayers{0};
+    size_t      m_nCtx{0};
     Embeddings  m_wpe;
     Embeddings  m_wte;
     LayerNorm   m_layerNorm;
+    aix::Tensor m_posEmb;
     std::vector<TransformerBlock>  m_transformerBlocks;
 };
+
+}   // namespace gpt2::kvcache
