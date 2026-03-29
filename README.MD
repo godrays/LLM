@@ -17,10 +17,10 @@ $ cd product-rel
 $ cd Resources
 $ python downloadGPT2.py init 124M
 $ cd ..
-$ ./GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --device=CPU
+$ ./GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --max-output-token=32
 ```
 
-NOTE: If you have an Apple Silicon hardware, use --device=MCS for GPU acceleration.
+NOTE: You can change device type with the `--device` parameter. By default, it will automatically select the best available device.
 
 Here is the output:
 

@@ -40,6 +40,7 @@ struct CmdLineOptions
     ModelConfigType modelType{ModelConfigType::OPENAI_124M};
     std::string modelImpl{"kvcache"};
     std::string modelPath;
+    bool autoDevice{true};
     aix::DeviceType deviceType{aix::DeviceType::kCPU};
     size_t maxOutputToken{1024};
 };
@@ -51,17 +52,18 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
     GPT2 - Copyright (c) 2024-Present, Arkin Terli. All rights reserved.
 
     Usage:
-        GPT2 --prompt=<text> --model=<type> --model-path=<path> --device=<type> [--model-impl=<impl>] [--max-output-token=<count>]
+        GPT2 --prompt=<text> --model=<type> --model-path=<path> [--device=<type>] [--model-impl=<impl>] [--max-output-token=<count>]
 
     Example:
-        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --device=MCS --max-output-token=42
+        GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --max-output-token=32
 
     Options:
         --prompt=<text>            Your prompt to the GPT2.
         --model=<type>             Model type to use. Options: [124M | 355M | 774M | 1558M]
         --model-impl=<impl>        Model implementation. Options: [kvcache | naive] [default: kvcache]
         --model-path=<path>        Model directory path.
-        --device=<type>            Device type to use. Options: [CPU | MCS]
+        --device=<type>            Device type to use. Options: [AUTO | CPU | MCS] [default: AUTO]
+                                   AUTO: Automatically selects the best available device (Metal, then CPU).
                                    MCS: Metal Compute Shaders for Apple Silicon.
         --max-output-token=<count> Maximum number of tokens to generate. [default: 1024]
     )";
@@ -96,8 +98,9 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         if (!modelPath.empty()) options.modelPath = modelPath;
         else throw std::invalid_argument("Invalid model path: " + modelPath);
 
-        if (deviceType == "CPU")        options.deviceType = aix::DeviceType::kCPU;
-        else if (deviceType == "MCS")   options.deviceType = aix::DeviceType::kGPU_METAL;
+        if (deviceType == "AUTO")       { /* autoDevice is true by default */ }
+        else if (deviceType == "CPU")   { options.autoDevice = false; options.deviceType = aix::DeviceType::kCPU; }
+        else if (deviceType == "MCS")   { options.autoDevice = false; options.deviceType = aix::DeviceType::kGPU_METAL; }
         else throw std::invalid_argument("Unknown device type: " + deviceType);
     }
     catch (std::exception& e)
@@ -156,6 +159,7 @@ int main(int argc, const char* argv[])
         .bpeMergeFile   = bpeMergeFile,
         .bpeVocabFile   = bpeVocabFile,
         .deviceType     = cmdLineOptions.deviceType,
+        .autoDevice     = cmdLineOptions.autoDevice,
         .maxOutputToken = cmdLineOptions.maxOutputToken,
         .nVocab         = hParams["nVocab"],
         .nCtx           = hParams["nCtx"],

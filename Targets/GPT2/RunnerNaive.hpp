@@ -14,7 +14,6 @@
 #include "ModelNaive.hpp"
 #include "Runner.hpp"
 // External includes
-#include <aixDevices.hpp>
 // System includes
 #include <cstdlib>
 #include <iostream>
@@ -30,7 +29,7 @@ public:
     {
         BPE bpe(config.bpeMergeFile, config.bpeVocabFile);
 
-        auto device = aix::createDevice(config.deviceType);
+        auto device = createDevice(config);
         if (!device)
         {
             std::cerr << "Device type is not supported." << std::endl;
