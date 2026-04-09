@@ -27,6 +27,8 @@ class RunnerNaive : public Runner
 public:
     void run(const RunnerConfig &config) override
     {
+        aix::NoGradGuard guard;
+
         BPE bpe(config.bpeMergeFile, config.bpeVocabFile);
 
         auto device = createDevice(config);

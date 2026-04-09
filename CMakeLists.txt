@@ -42,7 +42,7 @@ else()
 endif()
 
 # Set external library versions.
-set(EXTERNAL_AIX_VERSION 6c522f1)
+set(EXTERNAL_AIX_VERSION 633d76e)
 set(EXTERNAL_DOCOPT_VERSION 400e6dd)
 
 # Build external libraries.
