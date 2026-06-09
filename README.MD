@@ -24,7 +24,12 @@ NOTE: You can change device type with the `--device` parameter. By default, it w
 
 Here is the output:
 
-<a href="https://s11.gifyu.com/images/SBaAa.gif"><img src="https://s11.gifyu.com/images/SBaAa.gif" alt="Untitled" border="0" /></a>
+```text
+Prompt: What do you know about artificial intelligence?
+
+
+The answer is that it's a very complex field. It's not a simple problem. It's a complex problem that we're trying to solve.
+```
 
 # Project Build Instructions
 
