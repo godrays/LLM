@@ -16,6 +16,7 @@
 #include <aixDevices.hpp>
 #include <docopt/docopt.h>
 // System includes
+#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -43,6 +44,7 @@ struct CmdLineOptions
     bool autoDevice{true};
     aix::DeviceType deviceType{aix::DeviceType::kCPU};
     size_t maxOutputToken{1024};
+    bool printStats{false};
 };
 
 CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
@@ -52,7 +54,7 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
     GPT2 - Copyright (c) 2024-Present, Arkin Terli. All rights reserved.
 
     Usage:
-        GPT2 --prompt=<text> --model=<type> --model-path=<path> [--device=<type>] [--model-impl=<impl>] [--max-output-token=<count>]
+        GPT2 --prompt=<text> --model=<type> --model-path=<path> [--device=<type>] [--model-impl=<impl>] [--max-output-token=<count>] [--print-stats]
 
     Example:
         GPT2 --prompt="What do you know about artificial intelligence?" --model=124M --model-path=Resources/GPT2 --max-output-token=32
@@ -66,6 +68,7 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
                                    AUTO: Automatically selects the best available device (Metal, then CPU).
                                    MCS: Metal Compute Shaders for Apple Silicon.
         --max-output-token=<count> Maximum number of tokens to generate. [default: 1024]
+        --print-stats              Print run timing and token throughput statistics.
     )";
 
     CmdLineOptions options;
@@ -82,6 +85,7 @@ CmdLineOptions processCommandLineArguments(int argc, const char* argv[])
         auto modelPath  = args["--model-path"].asString();
         auto deviceType = args["--device"].asString();
         options.maxOutputToken = args["--max-output-token"].asLong();
+        options.printStats = args["--print-stats"].asBool();
 
         if (options.prompt.empty()) throw std::invalid_argument("Prompt cannot be empty.");
 
@@ -124,6 +128,7 @@ void validateFileExistence(const std::string& filePath)
 
 int main(int argc, const char* argv[])
 {
+    auto appStart = std::chrono::steady_clock::now();
     auto cmdLineOptions = processCommandLineArguments(argc, argv);
 
     std::vector<std::unordered_map<std::string, size_t>>  modelParams
@@ -172,7 +177,11 @@ int main(int argc, const char* argv[])
     if (cmdLineOptions.modelImpl == "naive")        runner = std::make_unique<RunnerNaive>();
     else if (cmdLineOptions.modelImpl == "kvcache") runner = std::make_unique<RunnerKVCache>();
 
-    runner->run(config);
+    auto metrics = runner->run(config);
+    auto appEnd = std::chrono::steady_clock::now();
+    metrics.totalDurationMs = std::chrono::duration<double, std::milli>(appEnd - appStart).count();
+
+    if (cmdLineOptions.printStats) Runner::printRunMetrics(metrics);
 
     return 0;
 }

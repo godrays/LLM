@@ -15,6 +15,7 @@
 #include "Runner.hpp"
 // External includes
 // System includes
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 
@@ -25,9 +26,10 @@ namespace gpt2
 class RunnerKVCache : public Runner
 {
 public:
-    void run(const RunnerConfig& config) override
+    RunMetrics run(const RunnerConfig& config) override
     {
         aix::NoGradGuard guard;
+        RunMetrics metrics;
 
         BPE bpe(config.bpeMergeFile, config.bpeVocabFile);
 
@@ -44,6 +46,7 @@ public:
 
         model.to(device);
         model.prepare(device.get());
+        device->synchronize();
 
         // Inference does not require gradient.
         for (auto & [name, param] : model.parameters())
@@ -55,19 +58,24 @@ public:
 
         // Create the initial token ids for the prompt.
         auto inputTokenIds = bpe.encode(config.prompt);
+        metrics.promptTokenCount = inputTokenIds.size();
 
         // Create a KV cache to avoid recomputing attention for past tokens during generation.
         auto cache = kvcache::KVCache(config.nLayers, config.nCtx, config.nEmbd, device.get());
+        device->synchronize();
 
         // Auto-regressive decoding loop with KV cache: generate/predict the next token and append it to the initial
         // tokens to predict the following token.
         auto maxTokensToGenerate = std::min(config.maxOutputToken, config.nCtx - inputTokenIds.size());
+        auto generationStart = std::chrono::steady_clock::now();
         for (size_t i=0; i<maxTokensToGenerate; ++i)
         {
             // The GPT-2 model was not trained with start-of-sentence (SOS) or end-of-sentence (EOS) tokens.
             // Therefore, we can't determine when to stop generating the next token. Thus, we generate a specific number
             // of tokens, ensuring it does not exceed the context length.
             if (inputTokenIds.size() >= config.nCtx) break;
+
+            auto stepStart = std::chrono::steady_clock::now();
 
             // On the first step, process all prompt tokens (prefill). On subsequent steps, only the last token (decode).
             aix::Tensor inputs;
@@ -92,13 +100,24 @@ public:
             // Synchronize to read data on the CPU.
             device->synchronize();
 
+            auto stepEnd = std::chrono::steady_clock::now();
+            auto stepDurationMs = std::chrono::duration<double, std::milli>(stepEnd - stepStart).count();
+            if (i == 0) metrics.prefillDurationMs += stepDurationMs;
+            else metrics.decodeDurationMs += stepDurationMs;
+
             // Decode the new token ID and print it.
             auto nextTokenId = nextTokenTensor.value().item<int32_t>();     // Argmax return type is always int32_t.
             std::cout << bpe.decode({nextTokenId}) << std::flush;
 
             // Append the new token ID to the current token sequence to predict the following token in the next iteration.
             inputTokenIds.emplace_back(nextTokenId);
+            ++metrics.generatedTokenCount;
         }
+
+        auto generationEnd = std::chrono::steady_clock::now();
+        metrics.generationDurationMs = std::chrono::duration<double, std::milli>(generationEnd - generationStart).count();
+
+        return metrics;
     }
 };
 

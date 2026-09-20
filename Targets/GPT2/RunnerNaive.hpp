@@ -15,6 +15,7 @@
 #include "Runner.hpp"
 // External includes
 // System includes
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 
@@ -25,9 +26,10 @@ namespace gpt2
 class RunnerNaive : public Runner
 {
 public:
-    void run(const RunnerConfig &config) override
+    RunMetrics run(const RunnerConfig &config) override
     {
         aix::NoGradGuard guard;
+        RunMetrics metrics;
 
         BPE bpe(config.bpeMergeFile, config.bpeVocabFile);
 
@@ -43,6 +45,7 @@ public:
         aix::nn::load(model, config.modelFile);
 
         model.to(device);
+        device->synchronize();
 
         for (auto & [name, param] : model.parameters())
         {
@@ -52,11 +55,15 @@ public:
         std::cout << "Prompt: " << config.prompt << std::endl;
 
         auto inputTokenIds = bpe.encode(config.prompt);
+        metrics.promptTokenCount = inputTokenIds.size();
         auto maxTokensToGenerate = std::min(config.maxOutputToken, config.nCtx - inputTokenIds.size());
+        auto generationStart = std::chrono::steady_clock::now();
 
         for (size_t i = 0; i < maxTokensToGenerate; ++i)
         {
             if (inputTokenIds.size() >= config.nCtx) break;
+
+            auto stepStart = std::chrono::steady_clock::now();
 
             auto inputs = aix::Tensor(inputTokenIds.data(), inputTokenIds.size(), aix::DataType::kInt64,
                                       aix::Shape{inputTokenIds.size()}, aix::dtype(aix::DataType::kInt32)).to(device);
@@ -66,11 +73,22 @@ public:
 
             device->synchronize();
 
+            auto stepEnd = std::chrono::steady_clock::now();
+            auto stepDurationMs = std::chrono::duration<double, std::milli>(stepEnd - stepStart).count();
+            if (i == 0) metrics.prefillDurationMs += stepDurationMs;
+            else metrics.decodeDurationMs += stepDurationMs;
+
             auto nextTokenId = nextTokenTensor.value().item<int32_t>();
             std::cout << bpe.decode({nextTokenId}) << std::flush;
 
             inputTokenIds.emplace_back(nextTokenId);
+            ++metrics.generatedTokenCount;
         }
+
+        auto generationEnd = std::chrono::steady_clock::now();
+        metrics.generationDurationMs = std::chrono::duration<double, std::milli>(generationEnd - generationStart).count();
+
+        return metrics;
     }
 };
 

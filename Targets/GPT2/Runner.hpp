@@ -14,6 +14,7 @@
 #include <aix.hpp>
 #include <aixDevices.hpp>
 // System includes
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -21,6 +22,16 @@
 
 namespace gpt2
 {
+
+struct RunMetrics
+{
+    size_t promptTokenCount{0};
+    size_t generatedTokenCount{0};
+    double totalDurationMs{0.0};
+    double generationDurationMs{0.0};
+    double prefillDurationMs{0.0};
+    double decodeDurationMs{0.0};
+};
 
 struct RunnerConfig
 {
@@ -42,7 +53,23 @@ class Runner
 {
 public:
     virtual ~Runner() = default;
-    virtual void run(const RunnerConfig &config) = 0;
+    virtual RunMetrics run(const RunnerConfig &config) = 0;
+
+    static void printRunMetrics(const RunMetrics& metrics)
+    {
+        auto totalDurationSec = metrics.totalDurationMs / 1000.0;
+        auto generationDurationSec = metrics.generationDurationMs / 1000.0;
+        auto tokensPerSecond = generationDurationSec > 0.0
+                             ? static_cast<double>(metrics.generatedTokenCount) / generationDurationSec
+                             : 0.0;
+
+        std::cout << "\n\n"
+                  << std::fixed << std::setprecision(2)
+                  << "Total duration: " << metrics.totalDurationMs << " ms (" << totalDurationSec << " s)\n"
+                  << "Generation duration: " << metrics.generationDurationMs << " ms (" << generationDurationSec << " s)\n"
+                  << "Prefill duration: " << metrics.prefillDurationMs << " ms\n"
+                  << "Tokens per second: " << tokensPerSecond << " tps\n";
+    }
 
 protected:
     static std::unique_ptr<aix::Device> createDevice(const RunnerConfig &config)
