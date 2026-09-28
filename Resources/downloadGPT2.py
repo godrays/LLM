@@ -15,8 +15,7 @@ import shutil
 
 
 def downloadGPT2Files(modelSize, modelDir):
-    import requests, json
-    from tqdm import tqdm
+    from pypdl import Pypdl
 
     for filename in [
         "checkpoint",
@@ -26,18 +25,21 @@ def downloadGPT2Files(modelSize, modelDir):
         "model.ckpt.meta",
     ]:
         url = "https://openaipublic.blob.core.windows.net/gpt-2/models"
-        r = requests.get(f"{url}/{modelSize}/{filename}", stream=True)
-        r.raise_for_status()
-
         fileFullPath = os.path.join(modelDir, filename)
-        with open(fileFullPath, "wb") as f:
-            fileSize = int(r.headers["content-length"])
-            chunkSize = 1000
-            with tqdm(ncols=100, desc="Fetching " + filename, total=fileSize, unit_scale=True, unit="b") as pbar:
-                # 1k for chunk_size, since Ethernet packet size is around 1500 bytes.
-                for chunk in r.iter_content(chunk_size=chunkSize):
-                    f.write(chunk)
-                    pbar.update(chunkSize)
+        result = Pypdl().start(
+            url=f"{url}/{modelSize}/{filename}",
+            file_path=fileFullPath,
+            headers={"x-ms-version": "2020-10-02"},
+            multisegment=True,
+            segments=8,
+            retries=3,
+            etag_validation=True,
+            overwrite=True,
+            display=True,
+            block=True,
+        )
+        if not result:
+            raise RuntimeError(f"Failed to download {filename}")
 
 
 def loadGPT2Params(checkpointPath, hparams):
@@ -172,9 +174,7 @@ if __name__ == "__main__":
     # Packages that will be installed in the virtual environment.
     venvPackages = ["numpy==2.1.3",
                     "regex==2024.11.6",
-                    "requests==2.32.3",
-                    "tqdm==4.67.1",
-                    "urllib3==2.3.0",
+                    "pypdl==1.5.7",
                     "tensorflow==2.19.0"]
 
     if mode == "init":      # The script will initiate virtual environment.
